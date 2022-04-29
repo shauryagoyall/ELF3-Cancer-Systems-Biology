@@ -115,7 +115,7 @@ def multiple_gaussian_fitting(array_to_be_plotted,gene_name,path_to_plots,num_ga
 	ax.set_xlim(-2.5,2.5)
 	ax.set_xlabel('score', fontsize=16)
 	ax.set_ylabel('Frequency', fontsize=16)
-	if phenotype == 'EMT':
+	if phenotype == 'EMT' or phenotype == "PDL1":
 			plt.axvline(x = hybrid - (abs(hybrid - min_mean)/2), color ='r')
 			plt.axvline(x = hybrid + (abs(hybrid - max_mean)/2), color ='r')
 	else:
@@ -163,13 +163,17 @@ def multiple_gaussian_fitting(array_to_be_plotted,gene_name,path_to_plots,num_ga
     
 def plot_histograms(df, network_name, plot_path, replicate):
     
-	df["EM_score"] = (df['ZEB'] + df['SLUG'] - df['CDH1'] - df['MIR'])/4
-	multiple_gaussian_fitting(df["EM_score"],"EMT_score_dist",plot_path,3,15,6,'EMT')
-	print(replicate + " EM Score Histogram done")
+	#df["EM_score"] = (df['ZEB'] + df['SLUG'] - df['CDH1'] - df['MIR'])/4
+	#multiple_gaussian_fitting(df["EM_score"],"EMT_score_dist",plot_path,3,15,6,'EMT')
+	#print(replicate + " EM Score Histogram done")
 	
-	#df["TamRes_score"] = df["ERA36"] - df["ERA66"]
-	#multiple_gaussian_fitting(df["TamRes_score"],"TamRes_score_dist",plot_path,2,15,6,'TamRes')
-	#print(replicate + " TamRes Score Histogram done")
+	#df["EM_score"] = (df['ZEB'] + df['SLUG'] - df['CDH1'] - df['MIR'])/4
+	#multiple_gaussian_fitting(df["PDL1"],"PDL1_dist",plot_path,3,15,6,'PDL1')
+	#print(replicate + " PDL1 Score Histogram done")
+	
+	df["TamRes_score"] = df["ERA36"] - df["ERA66"]
+	multiple_gaussian_fitting(df["TamRes_score"],"TamRes_score_dist",plot_path,2,15,6,'TamRes')
+	print(replicate + " TamRes Score Histogram done")
  
 #This function performs the Umap analysis. 
 def UMAP_analysis(data,n_neighbors=15, min_dist=0.1, n_components=2, metric='euclidean'):
@@ -179,7 +183,7 @@ def UMAP_analysis(data,n_neighbors=15, min_dist=0.1, n_components=2, metric='euc
     return umap_data
 
 #This function plots the output from the Umap analysis. 
-def UMAP_scatter(df, plot_path, replicate):
+def plot_UMAP_scatter(df, plot_path, replicate):
     sub_dataframe = df.sample(n=10000)
     embedding = UMAP_analysis(sub_dataframe,n_neighbors=100)
     UMAP = pd.DataFrame()
@@ -260,6 +264,23 @@ def plot_TamRes_PD_scatter(df, plot_path, replicate):
     
 	print(ss.spearmanr(df["TamRes_score"],df["PDL1"]))
     
+def plot_TamRes_PD_tri_scatter(df, plot_path, replicate):
+
+	mean_EMT, std_EMT = read_scoring(plot_path,'PDL1')
+	boundaries = phenotypes_boundary(mean_EMT,std_EMT) 
+    
+	df['TamRes_score'] = df["ERA36"] - df["ERA66"]
+	plt.scatter(df['TamRes_score'], df['PDL1'],marker="o",s=0.1,c='black')
+	plt.axhline(y=boundaries[0], color='r')
+	plt.axhline(y=boundaries[1], color='r')
+	plt.axvline(x=0, color='r')
+	plt.xlabel('Tamoxifen Resistance')
+	plt.ylabel('PD-L1 Expression')
+	plt.tight_layout()
+	plt.savefig(plot_path + "TamRes_PD_tri_scatter.png" , dpi=500)
+	plt.close()
+	print(replicate + " EM-PD Tri Scatter done")
+    
 # This function generates plot of conditional probability of PD-L1 high given a phenotype
 def plot_prob_state(df, plot_path, replicate):
 
@@ -307,6 +328,62 @@ def plot_prob_state(df, plot_path, replicate):
 	plt.close()
 	print(replicate + " prob vs phenotype done")
 
+# This function generates plot of conditional probability of PD-L1 high given a phenotype with PDL1 3 levels
+def plot_prob_state_tri(df, plot_path, replicate):
+
+	mean_EMT, std_EMT = read_scoring(plot_path,'EMT')
+	boundaries = phenotypes_boundary(mean_EMT,std_EMT)
+    
+	mean_PD, std_PD = read_scoring(plot_path,'PDL1')
+	boundaries_PD = phenotypes_boundary(mean_PD,std_PD) 
+    
+	df['EM_score'] = (df['ZEB'] + df['SLUG'] - df['CDH1'] - df['MIR'])/4
+    ## state = [pdl1 low, pdl1 med, pdl1 high, prob]
+	E = [0,0,0,0]
+	H = [0,0,0,0]
+	M = [0,0,0,0]
+	for i in range(len(df['EM_score'])):
+	    val = df['EM_score'][i]
+	    if val <= boundaries[0]:
+	        if df['PDL1'][i] <= boundaries_PD[0]:
+	            E[0] +=1
+	        elif df['PDL1'][i] > boundaries_PD[0] and df['PDL1'][i] <= boundaries_PD[1]:
+	            E[1] +=1
+	        else :
+	            E[2] +=1
+	    elif val > boundaries[0] and val <= boundaries[1]:
+	        if df['PDL1'][i] <= boundaries_PD[0]:
+	            H[0] +=1
+	        elif df['PDL1'][i] > boundaries_PD[0] and df['PDL1'][i] <= boundaries_PD[1]:
+	            H[1] +=1
+	        else :
+	            H[2] +=1
+	    else:
+	        if df['PDL1'][i] <= boundaries_PD[0]:
+	            M[0] +=1
+	        elif df['PDL1'][i] > boundaries_PD[0] and df['PDL1'][i] <= boundaries_PD[1]:
+	            M[1] +=1
+	        else :
+	            M[2] +=1
+                
+	E[3]= E[2] / ( E[0] + E[1] + E[2] )
+	H[3]= H[2] / ( H[0] + H[1] + H[2] )
+	M[3]= M[2] / ( M[0] + M[1] + M[2] )
+    
+	prob = [E[3], H[3], M[3]]
+    
+	
+	x = np.arange(3)
+	plt.bar(x, prob, color = ['black', 'orange','red' ], alpha=0.6)
+	plt.ylim(0, 1) 
+	plt.xticks(x, ['Epithelial','Hybrid','Mesenchymal'] )
+	plt.xlabel("Phenotype", weight = 'bold')
+	plt.ylabel("Conditional Probability", weight = 'bold')
+	plt.tight_layout()
+	plt.savefig(plot_path + "prob_state_tri.png" , dpi=500)
+	plt.close()
+	print(replicate + " prob vs phenotype tri done")
+    
 # This function generates plot of conditional probability of PD-L1 high given a resistance
 def plot_prob_resistance(df, plot_path, replicate):
 
@@ -344,14 +421,61 @@ def plot_prob_resistance(df, plot_path, replicate):
 	plt.close()
 	print(replicate + " prob vs resistance done")
 
-replicates = ['r1','r2','r3']
+# This function generates plot of conditional probability of PD-L1 high given a resistance
+def plot_prob_resistance_tri(df, plot_path, replicate):
+
+	df['TamRes_score'] = df["ERA36"] - df["ERA66"]
+    ## resistance level = [pdl1 low, pdl1 med, pdl1 high, prob]
+	S = [0,0,0,0]
+	R = [0,0,0,0]
+    
+	mean_PD, std_PD = read_scoring(plot_path,'PDL1')
+	boundaries_PD = phenotypes_boundary(mean_PD,std_PD)
+    
+	for i in range(len(df['TamRes_score'])):
+	    val = df['TamRes_score'][i]
+	    if val <= 0:
+	        if df['PDL1'][i] <= boundaries_PD[0]:
+	            S[0] +=1
+	        elif df['PDL1'][i] > boundaries_PD[0] and df['PDL1'][i] <= boundaries_PD[1]:
+	            S[1] +=1
+	        else :
+	            S[2] +=1
+	    else:
+	        if df['PDL1'][i] <= boundaries_PD[0]:
+	            R[0] +=1
+	        elif df['PDL1'][i] > boundaries_PD[0] and df['PDL1'][i] <= boundaries_PD[1]:
+	            R[1] +=1
+	        else :
+	            R[2] +=1
+                
+	S[3]= S[2] / ( S[0] + S[1] +S[2] )
+	R[3]= R[2] / ( R[0] + R[1] +R[2])
+    
+	prob = [S[3], R[3]]
+    
+	x = np.arange(2)
+	plt.bar(x, prob, color = ['green', 'maroon'], alpha=0.6)
+	plt.ylim(0, 1) 
+	plt.xticks(x, ['Sensitive','Resistant'] )
+	plt.xlabel("Phenotype", weight = 'bold')
+	plt.ylabel("Conditional Probability", weight = 'bold')
+	plt.tight_layout()
+	plt.savefig(plot_path + "prob_resistance_tri.png" , dpi=500)
+	plt.close()
+	print(replicate + " prob vs resistance tri done")
+    
+    
+replicates = ['r1','r2']
 
 def all_analysis(replicate):
 	core_path = "./elf3/"
 	
 	network_name = "elf3"
 	data_path = core_path + replicate + "/"
-	plot_path = data_path + "plots/"
+	#plot_path = data_path + "plots/"
+    ## For 3 levels of PDL1 use below path 
+	plot_path = data_path + "tri_plots/"
 	if not os.path.exists(plot_path):
          os.makedirs(plot_path)
 	df = pd.read_excel(data_path + network_name +".xlsx")
@@ -362,14 +486,17 @@ def all_analysis(replicate):
     ##############################################
     ##############################################
     
-	plot_heatmap(df, network_name, plot_path , replicate)
-	plot_correlation(df,network_name,plot_path, replicate)
-	plot_histograms(df, network_name, plot_path, replicate)
-	plot_EM_PD_scatter(df, plot_path,  replicate)
-	plot_TamRes_PD_scatter(df, plot_path,  replicate)
-	plot_prob_state(df, plot_path, replicate)
-	plot_prob_resistance(df, plot_path, replicate)
-	
+	#plot_heatmap(df, network_name, plot_path , replicate)
+	#plot_correlation(df,network_name,plot_path, replicate)
+	#plot_histograms(df, network_name, plot_path, replicate)
+	#plot_EM_PD_scatter(df, plot_path,  replicate)
+	#plot_TamRes_PD_scatter(df, plot_path,  replicate)
+	#plot_prob_state(df, plot_path, replicate)
+	#plot_prob_resistance(df, plot_path, replicate)
+	#plot_UMAP_scatter(df, plot_path, replicate)
+	#plot_prob_state_tri(df, plot_path, replicate)
+	#plot_TamRes_PD_tri_scatter(df, plot_path, replicate)
+	plot_prob_resistance_tri(df, plot_path, replicate)
 	
 for replicate in replicates:
 	all_analysis(replicate)
