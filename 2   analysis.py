@@ -6,7 +6,8 @@ import matplotlib.pyplot as plt
 from sklearn.mixture import GaussianMixture
 import umap
 import scipy.stats as ss
-
+plt.rcParams.update(plt.rcParamsDefault)
+sns.set_style("white")
 """This file contains the functions that generates a clustermap for the simulated data"""
 
 def plot_heatmap(df,network_name,path_to_plots, replicate):
@@ -163,13 +164,13 @@ def multiple_gaussian_fitting(array_to_be_plotted,gene_name,path_to_plots,num_ga
     
 def plot_histograms(df, network_name, plot_path, replicate):
     
-	#df["EM_score"] = (df['ZEB'] + df['SLUG'] - df['CDH1'] - df['MIR'])/4
-	#multiple_gaussian_fitting(df["EM_score"],"EMT_score_dist",plot_path,3,15,6,'EMT')
-	#print(replicate + " EM Score Histogram done")
+	df["EM_score"] = (df['ZEB'] + df['SLUG'] - df['CDH1'] - df['MIR'])/4
+	multiple_gaussian_fitting(df["EM_score"],"EMT_score_dist",plot_path,3,15,6,'EMT')
+	print(replicate + " EM Score Histogram done")
 	
 	#df["EM_score"] = (df['ZEB'] + df['SLUG'] - df['CDH1'] - df['MIR'])/4
-	#multiple_gaussian_fitting(df["PDL1"],"PDL1_dist",plot_path,3,15,6,'PDL1')
-	#print(replicate + " PDL1 Score Histogram done")
+	multiple_gaussian_fitting(df["PDL1"],"PDL1_dist",plot_path,3,15,6,'PDL1')
+	print(replicate + " PDL1 Score Histogram done")
 	
 	df["TamRes_score"] = df["ERA36"] - df["ERA66"]
 	multiple_gaussian_fitting(df["TamRes_score"],"TamRes_score_dist",plot_path,2,15,6,'TamRes')
@@ -203,18 +204,19 @@ def plot_UMAP_scatter(df, plot_path, replicate):
 
     #### UMAP of tamoxifen resistance score
     
-    # UMAP.plot.scatter(x='UMAP_1',y='UMAP_2',s=1,c=sub_dataframe['ERa36']-sub_dataframe['ERa66'],cmap=plt.cm.nipy_spectral)
-    # plt.title('Tamoxifen resistance score UMAP',fontsize=14)
-    # plt.xlabel('UMAP_1',fontsize=14)
-    # plt.ylabel('UMAP_2',fontsize=14)
-    # plt.xticks(fontsize=12)
-    # plt.yticks(fontsize=12)
-    # plt.savefig(plot_path+"TamRes_Umap=.png",dpi=400)
-    # plt.close()   
+    UMAP.plot.scatter(x='UMAP_1',y='UMAP_2',s=1,c=sub_dataframe['ERA36']-sub_dataframe['ERA66'],cmap=plt.cm.nipy_spectral)
+    plt.title('Tamoxifen resistance score UMAP',fontsize=14)
+    plt.xlabel('UMAP_1',fontsize=14)
+    plt.ylabel('UMAP_2',fontsize=14)
+    plt.xticks(fontsize=12)
+    plt.yticks(fontsize=12)
+    plt.savefig(plot_path+"TamRes_Umap=.png",dpi=400)
+    plt.close()   
  
 # This function reads the file containing the mean and standard deviation for each gaussian in the score distribution.
 def read_scoring(plot_path,phenotype):
 
+	data = pd.read_csv(plot_path+'_'+phenotype+'score_stats.txt',delimiter="\t",header=None)
 	data = pd.read_csv(plot_path+'_'+phenotype+'score_stats.txt',delimiter="\t",header=None)
 	mean_of_the_columns = data.mean(axis = 0)
 	sdev_of_the_columns = data.std(axis = 0)
@@ -249,6 +251,35 @@ def plot_EM_PD_scatter(df, plot_path, replicate):
 	print(ss.spearmanr(df["EM_score"],df["PDL1"]))
     
 # This function generates scatter plot of EM score vs PD-L1 expression
+def plot_EM_PD_tri_scatter(df, plot_path, replicate, network, core_plot):
+
+	if network != "core":
+		mean_EMT, std_EMT = read_scoring(core_plot,'EMT')
+	else:
+		mean_EMT, std_EMT = read_scoring(plot_path,'EMT')
+	boundaries = phenotypes_boundary(mean_EMT,std_EMT) 
+
+	if network != "core":
+		mean_PD, std_PD = read_scoring(core_plot,'PDL1')
+	else:
+		mean_PD, std_PD = read_scoring(plot_path,'PDL1')
+	boundaries_PD = phenotypes_boundary(mean_PD,std_PD) 
+    
+	df['EM_score'] = (df['ZEB'] + df['SLUG'] - df['CDH1'] - df['MIR'])/4
+	plt.scatter(df['EM_score'], df['PDL1'],marker="o",s=0.1,c='black')
+	plt.axvline(x=boundaries[0], color='r')
+	plt.axvline(x=boundaries[1], color='r')
+	plt.axhline(y=boundaries_PD[0], color='r')
+	plt.axhline(y=boundaries_PD[1], color='r')
+	plt.xlabel('EMT_score')
+	plt.ylabel('PD-L1 Expression')
+	plt.tight_layout()
+	plt.savefig(plot_path + "EM_PD_scatter.png" , dpi=500)
+	plt.close()
+	print(replicate + " EM-PD Scatter done")
+    
+	print(ss.spearmanr(df["EM_score"],df["PDL1"]))    
+# This function generates scatter plot of EM score vs PD-L1 expression
 def plot_TamRes_PD_scatter(df, plot_path, replicate):
 
 	df['TamRes_score'] = df["ERA36"] - df["ERA66"]
@@ -264,10 +295,13 @@ def plot_TamRes_PD_scatter(df, plot_path, replicate):
     
 	print(ss.spearmanr(df["TamRes_score"],df["PDL1"]))
     
-def plot_TamRes_PD_tri_scatter(df, plot_path, replicate):
+def plot_TamRes_PD_tri_scatter(df, plot_path, replicate, network, core_plot):
 
-	mean_EMT, std_EMT = read_scoring(plot_path,'PDL1')
-	boundaries = phenotypes_boundary(mean_EMT,std_EMT) 
+	if network != "core":
+		mean_PD, std_PD = read_scoring(core_plot,'PDL1')
+	else:
+		mean_PD, std_PD = read_scoring(plot_path,'PDL1')
+	boundaries = phenotypes_boundary(mean_PD,std_PD) 
     
 	df['TamRes_score'] = df["ERA36"] - df["ERA66"]
 	plt.scatter(df['TamRes_score'], df['PDL1'],marker="o",s=0.1,c='black')
@@ -329,12 +363,18 @@ def plot_prob_state(df, plot_path, replicate):
 	print(replicate + " prob vs phenotype done")
 
 # This function generates plot of conditional probability of PD-L1 high given a phenotype with PDL1 3 levels
-def plot_prob_state_tri(df, plot_path, replicate):
+def plot_prob_state_tri(df, plot_path, replicate, network, core_plot):
 
-	mean_EMT, std_EMT = read_scoring(plot_path,'EMT')
+	if network != "core":
+		mean_EMT, std_EMT = read_scoring(core_plot,'EMT')
+	else:
+		mean_EMT, std_EMT = read_scoring(plot_path,'EMT')
 	boundaries = phenotypes_boundary(mean_EMT,std_EMT)
     
-	mean_PD, std_PD = read_scoring(plot_path,'PDL1')
+	if network != "core":
+		mean_PD, std_PD = read_scoring(core_plot,'PDL1')
+	else:
+		mean_PD, std_PD = read_scoring(plot_path,'PDL1')
 	boundaries_PD = phenotypes_boundary(mean_PD,std_PD) 
     
 	df['EM_score'] = (df['ZEB'] + df['SLUG'] - df['CDH1'] - df['MIR'])/4
@@ -422,14 +462,16 @@ def plot_prob_resistance(df, plot_path, replicate):
 	print(replicate + " prob vs resistance done")
 
 # This function generates plot of conditional probability of PD-L1 high given a resistance
-def plot_prob_resistance_tri(df, plot_path, replicate):
+def plot_prob_resistance_tri(df, plot_path, replicate, network, core_plot):
 
 	df['TamRes_score'] = df["ERA36"] - df["ERA66"]
     ## resistance level = [pdl1 low, pdl1 med, pdl1 high, prob]
 	S = [0,0,0,0]
 	R = [0,0,0,0]
-    
-	mean_PD, std_PD = read_scoring(plot_path,'PDL1')
+	if network != "core":
+		mean_PD, std_PD = read_scoring(core_plot,'PDL1')
+	else:
+		mean_PD, std_PD = read_scoring(plot_path,'PDL1')
 	boundaries_PD = phenotypes_boundary(mean_PD,std_PD)
     
 	for i in range(len(df['TamRes_score'])):
@@ -466,16 +508,17 @@ def plot_prob_resistance_tri(df, plot_path, replicate):
 	print(replicate + " prob vs resistance tri done")
     
     
-replicates = ['r1','r2']
+replicates = ['r1','r2',"r3"]
+networks = ["elf3_20","elf3_50","era66_100"]
 
-def all_analysis(replicate):
-	core_path = "./elf3/"
+def all_analysis(replicate,network_name):
+	core_path = "./"+network_name+"/"
 	
-	network_name = "elf3"
+	#network_name = "elf3"
 	data_path = core_path + replicate + "/"
-	#plot_path = data_path + "plots/"
-    ## For 3 levels of PDL1 use below path 
-	plot_path = data_path + "tri_plots/"
+	plot_path = data_path + "plots/"
+    ## For oe de where boundaries come from the core circuit
+	core_plot = "./core/"+replicate+"/plots/"
 	if not os.path.exists(plot_path):
          os.makedirs(plot_path)
 	df = pd.read_excel(data_path + network_name +".xlsx")
@@ -489,14 +532,15 @@ def all_analysis(replicate):
 	#plot_heatmap(df, network_name, plot_path , replicate)
 	#plot_correlation(df,network_name,plot_path, replicate)
 	#plot_histograms(df, network_name, plot_path, replicate)
-	#plot_EM_PD_scatter(df, plot_path,  replicate)
-	#plot_TamRes_PD_scatter(df, plot_path,  replicate)
-	#plot_prob_state(df, plot_path, replicate)
-	#plot_prob_resistance(df, plot_path, replicate)
+	plot_EM_PD_tri_scatter(df, plot_path,  replicate, network_name, core_plot)
+	##plot_TamRes_PD_scatter(df, plot_path,  replicate)
+	##plot_prob_state(df, plot_path, replicate)
+	##plot_prob_resistance(df, plot_path, replicate)
 	#plot_UMAP_scatter(df, plot_path, replicate)
-	#plot_prob_state_tri(df, plot_path, replicate)
-	#plot_TamRes_PD_tri_scatter(df, plot_path, replicate)
-	plot_prob_resistance_tri(df, plot_path, replicate)
+	plot_prob_state_tri(df, plot_path, replicate, network_name, core_plot)
+	plot_TamRes_PD_tri_scatter(df, plot_path, replicate, network_name, core_plot)
+	plot_prob_resistance_tri(df, plot_path, replicate, network_name, core_plot)
 	
-for replicate in replicates:
-	all_analysis(replicate)
+for network in networks:
+    for replicate in replicates:
+    	all_analysis(replicate,network)
